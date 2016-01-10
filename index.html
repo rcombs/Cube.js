@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="favicon.png"/>
+    <title>Kociemba's Algorithm in JS</title>
+    <script src="Cube.js"></script>
+    <script type="text/javascript">
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-22477858-1']);
+        _gaq.push(['_trackPageview']);
+
+        (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+    <style>
+      #main {
+        display: inline-block;
+      }
+      #input, #output {
+        display: inline-block;
+        float: left;
+      }
+      .facelet {
+        width: 30px;
+        height: 30px;
+        display: block;
+        float: left;
+        border: 1px solid black;
+        cursor: url(bucket.cur) 12 23, pointer;
+      }
+      .move {
+        border: 1px solid grey;
+        padding: 2px;
+        background-color: #BDEDFF;
+      }
+      .move.current {
+        background-color: #FBB117;
+      }
+      summary {
+        display: block;
+      }
+      #prefs {
+        border: 1px dashed black;
+        display: inline-block;
+        padding: 5px;
+      }
+      #colors {
+        border: 1px dashed blue;
+        padding: 5px;
+      }
+      #applet {
+        display: block;
+      }
+      .colorLabel {
+        width: 60px;
+        display: inline-block;
+        position: relative;
+      }
+      .colorInput {
+        width: 50px;
+      }
+      #currentColor {
+        display: inline-block;
+        position: relative;
+        left: 140px;
+        top: 170px;
+        width: 60px;
+        height: 60px;
+        border: 1px solid black;
+        cursor: url(Eraser.png) 13 22, pointer;
+      }
+      .facelet.right {
+        clear: left;
+      }
+      .facelet.center {
+        cursor: url(eyedropper.cur) 7 27, pointer;
+      }
+      #entry {
+        height: 300px;
+      }
+      .side {
+        display: block;
+        float:left;
+      }
+      #U {
+        -webkit-transform: skewX(-45deg) translateX(50%) translateY(16.5%) scaleY(.6666);
+        -moz-transform: skewX(-45deg) translateX(50%) translateY(16.5%) scaleY(.6666);
+        -o-transform: skewX(-45deg) translateX(50%) translateY(16.5%) scaleY(.6666);
+      }
+      #R {
+        -webkit-transform: skewY(-45deg) translateY(-50%) translateX(-16.6%) scaleX(.6666);
+        -moz-transform: skewY(-45deg) translateY(-50%) translateX(-16.6%) scaleX(.6666);
+        -o-transform: skewY(-45deg) translateY(-50%) translateX(-16.6%) scaleX(.6666);
+      }
+      #B {
+        -webkit-transform: translateX(-33.3333%) translateY(-66.6666%);
+        -moz-transform: translateX(-33.3333%) translateY(-66.6666%);
+        -o-transform: translateX(-33.3333%) translateY(-66.6666%);
+      }
+      #U, #D {
+        position: relative;
+        left: 96px;
+        clear: left;
+      }
+      #L {
+        clear: left;
+      }
+      #cube {
+        font-family: Courier, monospace;
+        width: 380px;
+      }
+    </style>
+    <script src="jscolor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r73/three.min.js"></script>
+    <script>
+      var cc;
+      var generateColorsString = function() {return "FFFF00FFFFFFFF0000FF80400000FF00FF00";}
+      function getQueryString(queryString) {
+        var assoc = {};
+        var keyValues = queryString.split('&');
+        for (var i = 0; i < keyValues.length; i++) {
+          var split = keyValues[i].split('=');
+          var key = split.shift();
+          var value = split.join("=");
+          if (!value) {
+            value = true;
+          } else if (value.toLowerCase() == "true") {
+            value = true;
+          } else if (value.toLowerCase() == "false") {
+            value = false;
+          } else {
+            value = unescape(value).replace(/\+/g," ");
+          }
+          assoc[key] = value;
+        }
+        return assoc;
+      }
+      var maxtime = 10;
+      var maxmoves = 20;
+      var worker = new Worker("CubeWorker.js");
+      function typedToArray(typed) {
+        var a = []
+        for (var i = 0; i < typed.length; i++) {
+          a.push(i);
+        }
+        return a;
+      }
+      var totalTime = 0;
+      var facelets = ["U1", "U2", "U3", "U4", "U5", "U6", "U7", "U8", "U9", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
+      var colors = ["U","L","F","R","B","D"];
+      var colorNames = {
+        U: "#FFFF00",
+        R: "#008000",
+        F: "#FF0000",
+        L: "#0000FF",
+        D: "#FFFFFF",
+        B: "#FFA500",
+        _: "#808080"
+      };
+      var times = {
+        twistMove: 257,
+        flipMove: 220,
+        FRtoBR_Move: 1645,
+        URFtoDLF_Move: 3189,
+        URtoDF_Move: 2904,
+        URtoUL_Move: 173,
+        UBtoDF_Move: 185,
+        MergeURtoULandUBtoDF: 2803,
+        Slice_URFtoDLF_Parity_Prun: 3022,
+        Slice_URtoDF_Parity_Prun: 2828,
+        Slice_Twist_Prun: 2714,
+        Slice_Flip_Prun: 2544
+      };
+      worker.addEventListener("message", function(event) {
+        if (event.data.type == "message") {
+          console.log(event.data.msg);
+        } else if (event.data.type == "CoordCube") {
+          document.getElementById("bar").outerHTML = "Completed, took "+totalTime+"ms";
+          document.getElementById("solve").disabled = false;
+          var cc = event.data.cc;
+          for (var i in cc) {
+            if (i.indexOf("Slice") == 0) {
+              cc[i] = typedToArray(cc[i]);
+            }
+          }
+        } else if (event.data.type == "verify") {
+          if (event.data.result == 0) {
+            alert("Valid cube.");
+          } else {
+            var message;
+            switch (event.data.result) {
+              case -1:
+                message = "There is not exactly one face of each color";
+              break;
+              case -2:
+                message = "Not all 12 edges exist exactly once";
+              break;
+              case -3:
+                message = "Flip error: One edge has to be flipped";
+              break;
+              case -4:
+                message = "Not all corners exist exactly once";
+              break;
+              case -5:
+                message = "Twist error: One corner has to be twisted";
+              break;
+              case -6:
+                message = "Parity error: Two corners or two edges have to be exchanged";
+              break;
+              default:
+                message = "Unknown error";
+              break;
+            }
+            alert("Cube invalid. Error "+event.data.result+": "+message+".");
+          }
+        } else if (event.data.type == "random") {
+          document.getElementById("cube").value = event.data.result;
+          setInput.apply(document.getElementById("cube"));
+        } else if (event.data.type == "progress") {
+          var n = document.createElement("li");
+          totalTime += event.data.time;
+          n.innerHTML = event.data.line+" Completed, Took "+event.data.time+"ms";
+          document.getElementById("details").appendChild(n);
+          document.getElementById("bar").value += times[event.data.line];
+        } else if (event.data.type == "solution") {
+          if (event.data.result.indexOf("Error") == 0) {
+            var message;
+            var err = parseInt(event.data.result.substring(6, 7));
+            switch (err) {
+              case 1:
+                message = "There is not exactly one facelet of each color";
+              break;
+              case 2:
+                message = "Not all 12 edges exist exactly once";
+              break;
+              case 3:
+                message = "Flip error: One edge has to be flipped";
+              break;
+              case 4:
+                message = "Not all corners exist exactly once";
+              break;
+              case 5:
+                message = "Twist error: One corner has to be twisted";
+              break;
+              case 6:
+                message = "Parity error: Two corners or two edges have to be exchanged";
+              break;
+              case 7:
+                message = "No solution exists in "+maxmoves+" number of moves or less";
+              break;
+              case 8:
+                message = "Timed out; No solution found within "+maxtime+" seconds";
+              break;
+              default:
+                message = "Unknown error";
+              break;
+            }
+            alert((err < 7 ? "Invalid Cube. " : "Solver ") + "Error -"+err+": "+message+".");
+          } else {
+            var solArray = Cube.movesetToArray(event.data.result);
+            buildOutput(solArray);
+            setupAnimator(solArray);
+            pushState();
+          }
+        }
+      }, false);
+      worker.addEventListener("error", function(event) {
+        console.log(event);
+        event.preventDefault();
+      }, false);
+      function buildOutput(arr) {
+        var mainSpan = document.getElementById("solution");
+        mainSpan.moveset = arr;
+        mainSpan.innerHTML = "";
+        for (var i = 0; i < arr.length; i++) {
+          var span = document.createElement("span");
+          span.innerHTML = arr[i].text;
+          span.move = arr[i];
+          span.className = i == 0 ? "current move" : "move";
+          mainSpan.appendChild(span);
+          arr[i].el = span;
+        }
+      }
+      var currentColor = "F";
+      function setupAnimator(solArray) {
+        var genArray = Cube.reverseArray(solArray);
+        resetCubies();
+        runSequenceOnAnimator(genArray);
+        GL.solArray = solArray;
+        GL.genArray = genArray;
+        GL.pointer = 0;
+        document.getElementById("rewind").disabled = false;
+        document.getElementById("play").disabled = false;
+      }
+      function makeQueryString(obj, ignoreFalse, addQ) {
+        var s = addQ ? "?" : "";
+        var added = false;
+        for (var i in obj) {
+          if (obj.hasOwnProperty(i)) {
+            if (!(ignoreFalse && obj[i] == false)) {
+              added = true;
+              s += encodeURIComponent(i) + "=" + encodeURIComponent(obj[i]) + "&";
+            }
+          }
+        }
+        if (added) {
+          return s.substring(0, s.length-1);
+        } else {
+          return "";
+        }
+      }
+      function popState(event) {
+        var state = event.state;
+        if (!state) {
+          return;
+        }
+        var c = document.getElementById("cube");
+        if (state.cube) {
+          if (state.cube == "clean") {
+            cleanCube(true);
+          } else if (state.cube == "clear") {
+            clearFacelets(true);
+          } else if (state.cube == "random") {
+            worker.postMessage({type: "random"});
+          } else if (state.cube.length == 54) {
+            c.value = state.cube;
+            setInput.apply(c);
+          }
+        }
+        if (state.solution) {
+          var solution = state.solution.replace(/_/g," ");
+          if (Cube.validateMoveset(solution)) {
+            var solArray = Cube.movesetToArray(solution);
+            buildOutput(solArray);
+            setupAnimator(solArray);
+          } else {
+            alert("Invalid Moveset in URL!");
+          }
+        }
+      }
+      window.addEventListener("popstate", popState, false);
+      function pushState() {
+        var cube = document.getElementById("cube").value;
+        if (cube.length != 54) {
+          cube = false;
+        }
+        if (cube == "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB") {
+          cube = "clean";
+        }
+        if (cube == "____U________R________F________D________L________B____") {
+          cube = "clear";
+        }
+        if (isRandom) {
+          cube = "random";
+        }
+        if (document.getElementById("solution").moveset) {
+
+        }
+        var obj = {
+          cube: cube,
+          solution: document.getElementById("solution").moveset ? Cube.arrayToMoveset(document.getElementById("solution").moveset, true) : false
+        };
+        var x = makeQueryString(obj, true, true);
+        history.pushState(obj, document.title, x);
+      }
+      var isRandom = false;
+      function setCubeText() {
+        isRandom = false;
+        var s = ""
+        var x = document.getElementById("cube");
+        for (var i = 0; i < facelets.length; i++) {
+          if (document.getElementById(facelets[i]).color == "") {
+            x.value = "";
+            return;
+          }
+          s += document.getElementById(facelets[i]).color;
+        }
+        if (document.getElementById("autocomplete").checked == true) {
+          s = Cube.autocompleteCube(s);
+          x.value = s;
+          setInput();
+        } else {
+          x.value = s;
+        }
+        pushState();
+      }
+      function setInput() {
+        isRandom = false;
+        var cube = document.getElementById("cube");
+        if (cube.value.length == 54) {
+          var arr = cube.value.split("");
+          for (var i = 0; i < 54; i++) {
+            var x = facelets[i];
+            var e = document.getElementById(x);
+            e.color = arr[i];
+            e.style.backgroundColor = colorNames[arr[i]];
+          }
+        }
+      }
+      function clearFacelets(noPushState) {
+        isRandom = false;
+        document.getElementById("cube").value = "____U________R________F________D________L________B____";
+        for (var i = 0; i < facelets.length; i++) {
+          var x = document.getElementById(facelets[i]);
+          if (!x.classList.contains("center")) {
+            x.color = "_";
+            x.style.backgroundColor = colorNames._;
+          }
+        }
+        if (noPushState !== true) {
+          pushState();
+        }
+      }
+      function cleanCube(noPushState) {
+        isRandom = false;
+        for (var i = 0; i < facelets.length; i++) {
+          var x = document.getElementById(facelets[i]);
+          if (!x.classList.contains("center")) {
+            x.color = facelets[i].substring(0, 1);
+            x.style.backgroundColor = colorNames[x.color];
+          }
+        }
+        document.getElementById("cube").value = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
+        if (noPushState !== true) {
+          pushState();
+        }
+      }
+      function setColor() {
+        if (this.classList.contains("center")) {
+          currentColor = this.color;
+          document.getElementById("currentColor").color = currentColor;
+          document.getElementById("currentColor").style.backgroundColor = colorNames[currentColor];
+        } else {
+          this.color = currentColor;
+          this.style.backgroundColor = colorNames[currentColor];
+          setCubeText();
+        }
+      }
+      function calculateChanges(turn) {
+        var ret = {
+          from: [],
+          to: []
+        };
+        var axis1, axis2, axis3, a;
+        var direction = turn.direction;
+        if (turn.face == "U") {
+          axis1 = "y";
+          axis2 = "x";
+          axis3 = "z";
+          a = 2;
+        } else if (turn.face == "R") {
+          axis1 = "x";
+          axis2 = "z";
+          axis3 = "y";
+          a = 2;
+          direction *= -1;
+        } else if (turn.face == "F") {
+          axis1 = "z";
+          axis2 = "x";
+          axis3 = "y";
+          a = 0;
+        } else if (turn.face == "D") {
+          axis1 = "y";
+          axis2 = "z";
+          axis3 = "x";
+          a = 0;
+          direction *= -1;
+        } else if (turn.face == "L") {
+          axis1 = "x";
+          axis2 = "y";
+          axis3 = "z";
+          a = 0;
+        } else if (turn.face == "B") {
+          axis1 = "z";
+          axis2 = "y";
+          axis3 = "x";
+          a = 2;
+          direction *= -1;
+        }
+        // L R U D B F
+        var rotations = {
+          x: [2, 5, 3, 4],
+          y: [1, 5, 0, 4],
+          z: [0, 2, 1, 3]
+        }[axis1];
+        var applyTimes = 2 - direction;
+        var faceMoves = ret.faceMoves = [0, 1, 2, 3, 4, 5];
+        for (var i = 0; i < applyTimes; i++) {
+          var moves = faceMoves.slice();
+          for (var j = 0; j < 4; j++)
+            faceMoves[rotations[j]] = moves[rotations[(j + 1) % 4]];
+        }
+        for (var i = 0; i < 9; i++) {
+          var from = {};
+          var to = {};
+          from[axis1] = a;
+          from[axis2] = i % 3;
+          from[axis3] = (i / 3) | 0;
+          ret.from.push(from);
+          to[axis1] = a;
+          if (turn.direction == 0) {
+            to[axis2] = 2 - (i % 3);
+            to[axis3] = 2 - ((i / 3) | 0);
+          } else if (turn.direction == 1) {
+            to[axis2] = (i / 3) | 0;
+            to[axis3] = 2 - (i % 3);
+          } else if (turn.direction == -1) {
+            to[axis2] = 2 - ((i / 3) | 0);
+            to[axis3] = i % 3;
+          }
+          ret.to.push(to);
+        }
+        return ret;
+      }
+      function resetCubies() {
+        var cubies = GL.cubies;
+        for (var x = 0; x < 3; x++) {
+          for (var y = 0; y < 3; y++) {
+            for (var z = 0; z < 3; z++) {
+              var cubie = cubies[x][y][z];
+              cubie.position.x = (1 - x) * GL.explosionFactor;
+              cubie.position.y = (y - 1) * GL.explosionFactor;
+              cubie.position.z = (z - 1) * GL.explosionFactor;
+              cubie.rotation.x = cubie.rotation.y = cubie.rotation.z = 0;
+              var faces = cubie.material.materials;
+              var topColor    = (y == 2) ? 0xFFFF00 : 0x000000;
+              var rightColor  = (x == 2) ? 0x00FF00 : 0x000000;
+              var frontColor  = (z == 0) ? 0xFF0000 : 0x000000;
+              var bottomColor = (y == 0) ? 0xFFFFFF : 0x000000;
+              var leftColor   = (x == 0) ? 0x0000FF : 0x000000;
+              var backColor   = (z == 2) ? 0xFFA500 : 0x000000;
+              var colors = [leftColor, rightColor,
+                            topColor, bottomColor,
+                            backColor, frontColor];
+              for (var i = 0; i < 6; i++) {
+                faces[i].color.set(colors[i]);
+              }
+            }
+          }
+        }
+      }
+      function rearrangeCubies(turn, undo) {
+        var changes = calculateChanges(turn);
+        var from = changes.from;
+        var to = changes.to;
+        var cubies = GL.cubies;
+        var cubieArr = [];
+        for (var i = 0; i < from.length; i++) {
+          var j = from[i];
+          var cubie = cubies[j.x][j.y][j.z];
+          cubie.position.x = (1 - j.x) * GL.explosionFactor;
+          cubie.position.y = (j.y - 1) * GL.explosionFactor;
+          cubie.position.z = (j.z - 1) * GL.explosionFactor;
+          cubie.rotation.x = cubie.rotation.y = cubie.rotation.z = 0;
+          var faces = cubie.material.materials;
+          cubieArr[i] = [];
+          for (var k = 0; k < 6; k++) {
+            cubieArr[i][k] = new THREE.Color(faces[k].color);
+          }
+        }
+        if (!undo) {
+          for (var i = 0; i < to.length; i++) {
+            var pos = to[i];
+            var cubie = cubies[pos.x][pos.y][pos.z];
+            for (var j = 0; j < 6; j++) {
+              cubie.material.materials[changes.faceMoves[j]].color.set(cubieArr[i][j]);
+            }
+          }
+        }
+      }
+      function nextFrame() {
+        var turn = GL.currentTurn;
+        var animation = GL.animation;
+        var duration = animation.duration;
+        var direction = turn.direction || 1;
+        direction = GL.animation.reverse ? direction * -1 : direction;
+        var cubies = animation.cubies;
+        animation.frame++;
+        var portionComplete = (Date.now() - animation.startTime) / duration;
+        if (portionComplete > 1)
+          portionComplete = 1;
+        for (var i = 0; i < 9; i++) {
+          x = -direction * Math.PI / 2 * portionComplete;
+          var xa = x;
+          animation.cubies[i].rotation[animation.axis] = x;
+          if (i == 0) {
+            var sinAngle = xa + Math.PI * .75;
+            cubies[i].position[animation.cosAxis] = -Math.SQRT2 * (-GL.explosionFactor * Math.sin(sinAngle));
+            cubies[i].position[animation.sinAxis] = -Math.SQRT2 * (-GL.explosionFactor * Math.cos(sinAngle));
+          } else if (i == 1) {
+            var sinAngle = xa;
+            cubies[i].position[animation.sinAxis] = 1 * (-GL.explosionFactor * Math.sin(sinAngle));
+            cubies[i].position[animation.cosAxis] = -1 * (-GL.explosionFactor * Math.cos(sinAngle));
+          } else if (i == 2) {
+            var sinAngle = xa + Math.PI / 4;
+            cubies[i].position[animation.cosAxis] = -Math.SQRT2 * (-GL.explosionFactor * Math.sin(sinAngle));
+            cubies[i].position[animation.sinAxis] = -Math.SQRT2 * (-GL.explosionFactor * Math.cos(sinAngle));
+          } else if (i == 3) {
+            var sinAngle = xa;
+            cubies[i].position[animation.cosAxis] = 1 * (-GL.explosionFactor * (Math.sin(sinAngle)));
+            cubies[i].position[animation.sinAxis] = 1 * (-GL.explosionFactor * (Math.cos(sinAngle)));
+          } else if (i == 5) {
+            var sinAngle = xa;
+            cubies[i].position[animation.cosAxis] = -1 * (-GL.explosionFactor * (Math.sin(sinAngle)));
+            cubies[i].position[animation.sinAxis] = -1 * (-GL.explosionFactor * (Math.cos(sinAngle)));
+          } else if (i == 6) {
+            var sinAngle = xa + Math.PI * .75;
+            cubies[i].position[animation.sinAxis] = Math.SQRT2 * (-GL.explosionFactor * Math.sin(sinAngle));
+            cubies[i].position[animation.cosAxis] = -Math.SQRT2 * (-GL.explosionFactor * Math.cos(sinAngle));
+          } else if (i == 7) {
+            var sinAngle = xa;
+            cubies[i].position[animation.sinAxis] = -1 * (-GL.explosionFactor * Math.sin(sinAngle));
+            cubies[i].position[animation.cosAxis] = 1 * (-GL.explosionFactor * Math.cos(sinAngle));
+          } else if (i == 8) {
+            var sinAngle = xa + Math.PI / 4;
+            cubies[i].position[animation.sinAxis] = -Math.SQRT2 * (-GL.explosionFactor * Math.sin(sinAngle));
+            cubies[i].position[animation.cosAxis] = Math.SQRT2 * (-GL.explosionFactor * Math.cos(sinAngle));
+          }
+        }
+        if (Date.now() >= animation.startTime + duration) {
+          animation.startTime = Date.now();
+          if (turn.move == 2) {
+            var turn2 = new Cube.move(turn.text);
+            turn2.move = 1;
+            turn2.direction = 1;
+            rearrangeCubies(turn2);
+            GL.currentTurn = turn2;
+          } else {
+            rearrangeCubies(turn);
+            GL.animating = false;
+            if (GL.animation.callback) {
+              GL.animation.callback();
+            }
+          }
+        }
+      }
+      var piArr = [0, Math.PI / 2, Math.PI, Math.PI * 1.5, Math.PI * 2];
+      function roundToArray(n, a) {
+        return a.reduce(function (y, z) {
+          return ((Math.abs(n - y) > Math.abs(n - z)) ? z : y)
+        });
+      }
+      var GL = {};
+      function render() {
+        if (GL.animating) {
+          nextFrame();
+          GL.lastFrameTime = new Date();
+        }
+        GL.renderer.render(GL.scene, GL.camera);
+        requestAnimationFrame(render);
+      }
+      function buildAnimator() {
+        var explosionFactor = 1.1;
+        GL.explosionFactor = explosionFactor
+        var container = document.getElementById("animationDiv");
+        var renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        var camera = new THREE.PerspectiveCamera(
+          45,   // Field of view
+          1,    // Aspect ratio
+          .1,   // Near
+          10000 // Far
+        );
+        var scene = new THREE.Scene();
+        camera.position.set(7, 7, -7);
+        camera.lookAt(scene.position);
+        var pixelRatio = window.devicePixelRatio || 1;
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(400, 400, true);
+        container.appendChild(renderer.domElement);
+
+        var cubies = [];
+        for (var x = 0; x < 3; x++) {
+          cubies[x] = [];
+          for (var y = 0; y < 3; y++) {
+            cubies[x][y] = [];
+            for (var z = 0; z < 3; z++) {
+              var topColor    = (y == 2) ? 0xFFFF00 : 0x000000;
+              var rightColor  = (x == 2) ? 0x00FF00 : 0x000000;
+              var frontColor  = (z == 0) ? 0xFF0000 : 0x000000;
+              var bottomColor = (y == 0) ? 0xFFFFFF : 0x000000;
+              var leftColor   = (x == 0) ? 0x0000FF : 0x000000;
+              var backColor   = (z == 2) ? 0xFFA500 : 0x000000;
+              var geometry = new THREE.BoxGeometry(1, 1, 1);
+
+              var cube = new THREE.Mesh(
+                geometry,
+                new THREE.MeshFaceMaterial([
+                  new THREE.MeshBasicMaterial({ color: leftColor   }),
+                  new THREE.MeshBasicMaterial({ color: rightColor  }),
+                  new THREE.MeshBasicMaterial({ color: topColor    }),
+                  new THREE.MeshBasicMaterial({ color: bottomColor }),
+                  new THREE.MeshBasicMaterial({ color: backColor   }),
+                  new THREE.MeshBasicMaterial({ color: frontColor  }),
+                ])
+              );
+
+              cube.position.set((1 - x) * explosionFactor,
+                                (y - 1) * explosionFactor,
+                                (z - 1) * explosionFactor);
+              cubies[x][y][z] = cube;
+              scene.add(cube);
+            }
+          }
+        }
+
+        GL.animating = false;
+        GL.cubies = cubies;
+        GL.container = container;
+        GL.renderer = renderer;
+        GL.camera = camera;
+        GL.scene = scene;
+        GL.lastFrameTime = new Date();
+
+        requestAnimationFrame(render);
+      }
+      function animateTurn(turn, callback) {
+        GL.currentTurn = turn;
+        GL.animation = {
+          frame: 0,
+          callback: callback,
+          startTime: Date.now(),
+          duration: 1000
+        };
+        var cubies = GL.cubies;
+        if (turn.face == "U") {
+          GL.animation.cubies = [
+            cubies[0][2][0],
+            cubies[0][2][1],
+            cubies[0][2][2],
+            cubies[1][2][0],
+            cubies[1][2][1],
+            cubies[1][2][2],
+            cubies[2][2][0],
+            cubies[2][2][1],
+            cubies[2][2][2]
+          ];
+          GL.animation.axis = "y";
+          GL.animation.cosAxis = "x";
+          GL.animation.sinAxis = "z";
+          GL.animation.reverse = false;
+        } else if (turn.face == "R") {
+          GL.animation.cubies = [
+            cubies[2][0][2],
+            cubies[2][1][2],
+            cubies[2][2][2],
+            cubies[2][0][1],
+            cubies[2][1][1],
+            cubies[2][2][1],
+            cubies[2][0][0],
+            cubies[2][1][0],
+            cubies[2][2][0]
+          ];
+          GL.animation.axis = "x";
+          GL.animation.cosAxis = "z";
+          GL.animation.sinAxis = "y";
+          GL.animation.reverse = true;
+        } else if (turn.face == "F") {
+          GL.animation.cubies = [
+            cubies[2][2][0],
+            cubies[1][2][0],
+            cubies[0][2][0],
+            cubies[2][1][0],
+            cubies[1][1][0],
+            cubies[0][1][0],
+            cubies[2][0][0],
+            cubies[1][0][0],
+            cubies[0][0][0]
+          ];
+          GL.animation.axis = "z";
+          GL.animation.cosAxis = "y";
+          GL.animation.sinAxis = "x";
+          GL.animation.reverse = true;
+        } else if (turn.face == "D") {
+          GL.animation.cubies = [
+            cubies[0][0][0],
+            cubies[0][0][1],
+            cubies[0][0][2],
+            cubies[1][0][0],
+            cubies[1][0][1],
+            cubies[1][0][2],
+            cubies[2][0][0],
+            cubies[2][0][1],
+            cubies[2][0][2]
+          ];
+          GL.animation.axis = "y";
+          GL.animation.cosAxis = "x";
+          GL.animation.sinAxis = "z";
+          GL.animation.reverse = true;
+        } else if (turn.face == "L") {
+          GL.animation.cubies = [
+            cubies[0][0][2],
+            cubies[0][1][2],
+            cubies[0][2][2],
+            cubies[0][0][1],
+            cubies[0][1][1],
+            cubies[0][2][1],
+            cubies[0][0][0],
+            cubies[0][1][0],
+            cubies[0][2][0]
+          ];
+          GL.animation.axis = "x";
+          GL.animation.cosAxis = "z";
+          GL.animation.sinAxis = "y";
+          GL.animation.reverse = false;
+        } else if (turn.face == "B") {
+          GL.animation.cubies = [
+            cubies[2][2][2],
+            cubies[1][2][2],
+            cubies[0][2][2],
+            cubies[2][1][2],
+            cubies[1][1][2],
+            cubies[0][1][2],
+            cubies[2][0][2],
+            cubies[1][0][2],
+            cubies[0][0][2]
+          ];
+          GL.animation.axis = "z";
+          GL.animation.cosAxis = "y";
+          GL.animation.sinAxis = "x";
+          GL.animation.reverse = false;
+        }
+        GL.animating = true;
+      }
+      function setColorNames() {
+        localStorage.colorNames = JSON.stringify(colorNames);
+      }
+      function getColorNames() {
+        if (localStorage.colorNames) {
+          colorNames = JSON.parse(localStorage.colorNames);
+        } else {
+          colorNames = {
+            U: "#FFFF00",
+            R: "#008000",
+            F: "#FF0000",
+            L: "#0000FF",
+            D: "#FFFFFF",
+            B: "#FFA500",
+            _: "#808080"
+          };
+        }
+        for (var i in colorNames) {
+          var el = document.getElementById(i+"Color");
+          if (el) {
+            el.value = colorNames[i];
+            var event = document.createEvent('HTMLEvents');
+            event.initEvent("input", true, true);
+            el.dispatchEvent(event);
+          }
+        }
+      }
+      function resetColorNames() {
+        localStorage.colorNames = "";
+        getColorNames();
+        setInput.apply(document.getElementById("cube"));
+      }
+      function setColors(event) {
+        colorNames[this.getAttribute("data-side")] = this.value;
+        setInput.apply(document.getElementById("cube"));
+        setColorNames();
+      }
+      function setColorBlank() {
+        currentColor = "_";
+        document.getElementById("currentColor").color = currentColor;
+        document.getElementById("currentColor").style.backgroundColor = colorNames[currentColor];
+      }
+      document.addEventListener("DOMContentLoaded", function() {
+        buildAnimator();
+        document.getElementById("generateButton").addEventListener("click", function() {
+          worker.postMessage({type: "generateTables"});
+          document.getElementById("progress").hidden = false;
+          document.getElementById("generate").hidden = true;
+          _gaq.push(["_trackEvent", "Cubes", "Generate Tables"]);
+        }, false);
+        document.getElementById("randomButton").addEventListener("click", function() {
+          worker.postMessage({type: "random"});
+          isRandom = true;
+          pushState();
+          _gaq.push(["_trackEvent", "Cubes", "Random Cube"]);
+        }, false);
+        document.getElementById("maxmoves").addEventListener("input", function() {
+          maxmoves = this.valueAsNumber;
+        }, false);
+        document.getElementById("maxtime").addEventListener("input", function() {
+          maxtime = this.valueAsNumber;
+        }, false);
+        document.getElementById("verify").addEventListener("click", function() {
+          worker.postMessage({type: "verify", cube: document.getElementById("cube").value});
+          _gaq.push(["_trackEvent", "Cubes", "Verify Cube", document.getElementById("cube").value]);
+        }, false);
+        document.getElementById("solve").addEventListener("click", function() {
+          worker.postMessage({type: "solve", cube: document.getElementById("cube").value, maxDepth: maxmoves, maxTime: maxtime});
+          _gaq.push(["_trackEvent", "Cubes", "Solve Cube", document.getElementById("cube").value]);
+        }, false);
+        var colorInputs = document.getElementsByClassName("colorInput");
+        for (var i = 0; i < colorInputs.length; i++) {
+          colorInputs[i].addEventListener("change", setColors, false);
+        }
+        document.getElementById("cube").addEventListener("input", setInput, false);
+        document.getElementById("clear").addEventListener("click", clearFacelets, false);
+        document.getElementById("clean").addEventListener("click", cleanCube, false);
+        document.getElementById("resetColors").addEventListener("click", resetColorNames, false);
+        getColorNames();
+        var eDiv = document.getElementById("entry");
+        for (var i = 0; i < colors.length; i++) {
+          var nDiv = document.createElement("div");
+          nDiv.className = "side";
+          nDiv.id = colors[i];
+          eDiv.appendChild(nDiv);
+        }
+        for (var i = 0; i < facelets.length; i++) {
+          var nDiv = document.createElement("div");
+          if (facelets[i].substring(1, 2) == "5") {
+            nDiv.className = "facelet center";
+          } else if ((parseInt(facelets[i].substring(1, 2))-1) % 3 == 0 && facelets[i].substring(1, 2) != "9") {
+            nDiv.className = "facelet right";
+          } else {
+            nDiv.className = "facelet";
+          }
+          nDiv.id = facelets[i];
+          nDiv.color = facelets[i].substring(0, 1);
+          nDiv.style.backgroundColor = colorNames[nDiv.color];
+          nDiv.addEventListener("click", setColor, false);
+          var xDiv = document.getElementById(facelets[i].substring(0, 1));
+          xDiv.appendChild(nDiv);
+        }
+        document.getElementById("currentColor").addEventListener("click", setColorBlank, false);
+        document.getElementById("pause").addEventListener("pause", function() {
+          pauseSequence(true);
+        })
+        document.getElementById("play").addEventListener("click", function() {
+          document.getElementById("pause").disabled = false;
+          if (GL.paused != true) {
+            GL.paused = false;
+            GL.direction = "forward";
+            animateSequence(GL.solArray, function(turn) {
+              var el = turn.el;
+              var el2 = document.getElementsByClassName("current")[0];
+              if (el2) {
+                el2.classList.remove("current");
+              }
+              el.classList.add("current");
+            }, function() {
+              document.getElementById("pause").disabled = true;
+            });
+          } else if (GL.direction == "forward") {
+            resumeAnimation();
+          } else {
+            // FIXME: WRITEME
+          }
+        }, false);
+        document.getElementById("rewind").addEventListener("click", function() {
+          animateSequence(GL.genArray);
+        }, false);
+        if (window.location.search != "") {
+          var x = getQueryString(window.location.search.substring(1));
+          var e = {state: x};
+          popState(e);
+        } else {
+          var e = {state: {cube: "clear"}};
+          popState(e);
+        }
+        document.getElementById("currentColor").style.backgroundColor = colorNames[currentColor];
+      }, false);
+      //worker.postMessage("generateTables");
+      function runSequenceOnAnimator(arr) {
+        for (var i = 0; i < arr.length; i++) {
+          var x = JSON.parse(JSON.stringify(arr[i]));
+          if (x.move == 2) {
+            x.move = 1;
+            x.direction = 1;
+            rearrangeCubies(x);
+            rearrangeCubies(x);
+          } else {
+            rearrangeCubies(x);
+          }
+        }
+      }
+      function pauseSequence(stop, undo) {
+        GL.animating = false;
+        if (stop) {
+          GL.animation.frame = 0;
+          rearrangeCubies(GL.currentTurn, undo);
+        }
+        GL.paused = true;
+      }
+      function resumeSequence() {
+        GL.animating = true;
+      }
+      function animateSequence(sequence, turnCallback, sequenceCallback) {
+        var seq = sequence.concat();
+        var next = function() {
+          var x = seq.shift();
+          if (x) {
+            if (turnCallback) {
+              turnCallback(x);
+            }
+            animateTurn(x, function () {
+              setTimeout(next, 100);
+            });
+          }
+          if (!x && sequenceCallback) {
+            sequenceCallback();
+          }
+        }
+        next();
+      }
+    </script>
+  </head>
+  <body>
+    <div id="main">
+      <div id="input">
+        <div class="fb-like" data-href="http://rcombs.me/Cubes/" data-send="false" data-width="450" data-show-faces="true" data-font="lucida grande"></div>
+        <script type="text/javascript">
+          (function() {
+            var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+            po.src = 'https://apis.google.com/js/plusone.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+          })();
+        </script>
+        <div id="fb-root"></div>
+        <script>(function(d, s, id) {
+          var js, fjs = d.getElementsByTagName(s)[0];
+          if (d.getElementById(id)) return;
+          js = d.createElement(s); js.id = id;
+          js.src = "https://connect.facebook.net/en_US/all.js#xfbml=1&appId=243101652416985";
+          fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));</script>
+        <div id="generate"><button id="generateButton">Generate Tables</button></div>
+        <details id="progress" hidden="hidden">
+          <summary>Progress: <progress id="bar" value="0" max="22484"></progress></summary>
+          <ol id="details">
+          </ol>
+        </details>
+        <div id="random"><button id="randomButton">Random Cube</button><button id="clean">Clean Cube</button><button id="clear">Clear Cube</button></div>
+        <div id="solver"><input type="text" id="cube" maxlength="54" spellcheck="false" value="____U________R________F________D________L________B____"><button id="verify">Verify Cube</button><button id="solve" disabled="disabled">Solve Cube</button></div>
+        <details id="prefs">
+          <summary>Preferences</summary>
+          <div>
+            <label for="maxmoves">Maximum Moves</label><input type="number" id="maxmoves" value="20" min="16" max="24">
+            <label for="maxtime">Maximum Time</label><input type="number" id="maxtime" value="10" min="5" max="60"><br>
+            <label for="autocomplete">Autocomplete</label> <input type="checkbox" id="autocomplete" checked="checked">
+          </div>
+          <div>
+            <details id="colors">
+              <summary>Colors</summary>
+              <label for="UColor" class="colorLabel">Top:</label><input type="color" id="UColor" value="#FFFF00" class="colorInput" data-side="U"><br>
+              <label for="RColor" class="colorLabel">Right:</label><input type="color" id="RColor" value="#00FF00" class="colorInput" data-side="R"><br>
+              <label for="FColor" class="colorLabel">Front:</label><input type="color" id="FColor" value="#FF0000" class="colorInput" data-side="F"><br>
+              <label for="DColor" class="colorLabel">Bottom:</label><input type="color" id="DColor" value="#FFFFFF" class="colorInput" data-side="D"><br>
+              <label for="LColor" class="colorLabel">Left:</label><input type="color" id="LColor" value="#0000FF" class="colorInput" data-side="L"><br>
+              <label for="BColor" class="colorLabel">Back:</label><input type="color" id="BColor" value="#FFA500" class="colorInput" data-side="B"><br>
+              <label for="_Color" class="colorLabel">Blank:</label><input type="color" id="_Color" value="#808080" class="colorInput" data-side="_"><br>
+              <button id="resetColors">Reset Colors</button>
+            </details>
+          </div>
+        </details>
+        <div id="entry">
+          <div id="currentColor"></div>
+        </div>
+      </div>
+      <div id="output">
+        <div class="g-plusone" data-annotation="inline" data-width="300"></div><br>
+        <span id="outputText">Solution: <span id="solution">N/A</span></span>
+        <div id="controlDiv">
+          <button id="jumpb" disabled="disabled">|&lt;</button><button id="stepb" disabled="disabled">&lt;|</button><button id="rewind" disabled="disabled">&lt;</button><button id="pause" disabled="disabled">||</button><button id="play" disabled="disabled">&gt;</button><button id="stepf" disabled="disabled">&gt;</button><button id="jumpf" disabled="disabled">&gt;|</button>
+        </div>
+        <div id="animationDiv"></div>
+      </div>
+    </div>
+    <div id="ads">
+      <script type="text/javascript"><!--
+        google_ad_client = "ca-pub-2414362208248834";
+        /* Cube solver */
+        google_ad_slot = "6775293611";
+        google_ad_width = 728;
+        google_ad_height = 90;
+        //-->
+      </script>
+      <script type="text/javascript" src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
+      </script>
+    </div>
+  </body>
+</html>
