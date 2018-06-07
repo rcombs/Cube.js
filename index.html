@@ -862,13 +862,11 @@
           worker.postMessage({type: "generateTables"});
           document.getElementById("progress").hidden = false;
           document.getElementById("generate").hidden = true;
-          _gaq.push(["_trackEvent", "Cubes", "Generate Tables"]);
         }, false);
         document.getElementById("randomButton").addEventListener("click", function() {
           worker.postMessage({type: "random"});
           isRandom = true;
           pushState();
-          _gaq.push(["_trackEvent", "Cubes", "Random Cube"]);
         }, false);
         document.getElementById("maxmoves").addEventListener("input", function() {
           maxmoves = this.valueAsNumber;
@@ -878,11 +876,9 @@
         }, false);
         document.getElementById("verify").addEventListener("click", function() {
           worker.postMessage({type: "verify", cube: document.getElementById("cube").value});
-          _gaq.push(["_trackEvent", "Cubes", "Verify Cube", document.getElementById("cube").value]);
         }, false);
         document.getElementById("solve").addEventListener("click", function() {
           worker.postMessage({type: "solve", cube: document.getElementById("cube").value, maxDepth: maxmoves, maxTime: maxtime});
-          _gaq.push(["_trackEvent", "Cubes", "Solve Cube", document.getElementById("cube").value]);
         }, false);
         var colorInputs = document.getElementsByClassName("colorInput");
         for (var i = 0; i < colorInputs.length; i++) {
